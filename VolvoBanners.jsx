@@ -1,4 +1,4 @@
-// SHIM to allow font searching with TEN YEAR OLD JS methods.
+// Shim to allow font list searching with TEN YEAR OLD native JS methods, FFS.
 if (typeof Array.prototype.indexOf != "function") {  
     Array.prototype.indexOf = function (el) {  
         for(var i = 0; i < this.length; i++) if(el === this[i]) return i;  
@@ -9,13 +9,26 @@ if (typeof Array.prototype.indexOf != "function") {
 
 #target photoshop;
 
+const _folderSource = $.includePath; // The current folder location
 
 const _ScriptTitle = "Volvo Q3 Banner Automation";
 
 // Default required fonts for Volvo creative. Not all may be needed for any given banner, but safer to ensure all are available.
 const _reqFonts = ["VolvoBroadPro", "VolvoSansPro", "VolvoSansPro-Bold", "VolvoSansPro-Light", "VolvoSansPro-Medium"];
 
-const _exportFormats = [{size:"300 x 250",name:"MPU"},{size:"160 x 600",name:"Wide Sky"},{size:"728 x 90",name:"Leaderboard"}];
+const _exportFormats = [{size:"300 x 250",name:"MPU"},{size:"160 x 600",name:"Wide Sky"}/*,{size:"728 x 90",name:"Leaderboard"}*/];
+
+const _manifest = [
+                    {   title:  "HTML",
+                        files:[ "index.html"]
+                    },
+                    {   title:  "GIF",
+                        files:[ "backup_source.psd"]
+                    }
+                ];
+
+var _userOptions = {};
+
 
 var scriptResult;
 
@@ -49,20 +62,14 @@ function main() {
 	checkFonts();
 	// 1b. incorporate messaging that reports all fonts are installed (list in dialog panel?)
 
-	// 2. ensure necessary files are in the right place
+	// DONE! 2. ensure necessary files are in the right place
+    checkFilesAndFolders(_manifest, _exportFormats.length);
 
 	// 3. Build interface and capture user input
-	var userOptions = getUserOptions();
+	getUserOptions();
 
-	if(userOptions == false) {
-		return false;
-	}
+    // steps 4+ are in handleApply()
 
-	// 3. Open and amend GIFs for all selected formats (error check: text layer exists)
-	// 4. Save-for-web GIFs in target folder and close
-	// 5. Find and replace copy in all selected HTML5 units (error checks: files exist, source copy exists)
-	// 6. Save HTML5 in target folder (error check: target folder exists, file saved)
-	// 7. ZIP output folder and conclude.
 
 }
 
@@ -90,9 +97,9 @@ function getUserOptions() {
 	dlg.nameEntry.retailerNameGrp.orientation = 'row';
 
 	dlg.nameEntry.retailerNameGrp.label01 = dlg.nameEntry.retailerNameGrp.add('statictext', undefined, 'Retailer name:');
-
 	dlg.nameEntry.retailerNameGrp.entry01 = dlg.nameEntry.retailerNameGrp.add('edittext', undefined, '');
 	dlg.nameEntry.retailerNameGrp.entry01.characters = 30;
+    dlg.nameEntry.retailerNameGrp.entry01.onChanging = function() { _userOptions['retailerName'] = dlg.nameEntry.retailerNameGrp.entry01.text }
 	
 	dlg.nameEntry.businessNameGrp = dlg.nameEntry.add('group', undefined);
 	dlg.nameEntry.businessNameGrp.orientation = 'row';
@@ -100,47 +107,68 @@ function getUserOptions() {
 	dlg.nameEntry.businessNameGrp.label02 = dlg.nameEntry.businessNameGrp.add('statictext', undefined, 'Legal business name:');
 	dlg.nameEntry.businessNameGrp.entry02 = dlg.nameEntry.businessNameGrp.add('edittext', undefined, '');
 	dlg.nameEntry.businessNameGrp.entry02.characters = 30;
+    _userOptions['businessName'] = dlg.nameEntry.businessNameGrp.entry02.value;
 
 
 
+    // Required sizes selection group
+    dlg.requiredSizesPnl = dlg.add('panel', [0,0,300,60+(30*_exportFormats.length)], "Choose required sizes");
+    dlg.requiredSizesPnl.alignment = 'left';
 	for( var i=0; i<_exportFormats.length; i++) {
-		// TO DO: Create dynamic population of the size options.
+        var chk = dlg.requiredSizesPnl.add('checkbox', [50,30+(30*i),150,30], _exportFormats[i].size+" ("+_exportFormats[i].name+")");
+        var sizeOption = 'sizeOption'+i;
+        _userOptions[sizeOption] = chk.value;
+        chk.onClick = (function(thisOption,thisChk) {
+            return function() { handleCheck(thisOption, thisChk)}
+        })(sizeOption,chk);
 	}
-	dlg.requiredSizesPnl = dlg.add('panel', [0,0,300,150], "Choose required sizes");
-	dlg.requiredSizesPnl.alignment = 'left';
-	dlg.requiredSizesPnl.chk01 = dlg.requiredSizesPnl.add('checkbox', [50,30,150,30], '728 x 90 (Leaderboard)');
-	dlg.requiredSizesPnl.chk02 = dlg.requiredSizesPnl.add('checkbox', [50,60,150,30], '160 x 600 (Sky)');
-	dlg.requiredSizesPnl.chk03 = dlg.requiredSizesPnl.add('checkbox', [50,90,150,30], '300x250 (MPU)');
 
+    // Submission group (Apply, OK (should mean leave but save changes?), Cancel (quit without saving));
 	dlg.submissionGrp = dlg.add('group', undefined);
 	dlg.submissionGrp.alignment = 'right';
 	dlg.submissionGrp.but_apply = dlg.submissionGrp.add('button', undefined, 'Apply changes');
-	dlg.submissionGrp.but_ok = dlg.submissionGrp.add('button', undefined, 'OK');
+	//dlg.submissionGrp.but_ok = dlg.submissionGrp.add('button', undefined, 'OK');
 	dlg.submissionGrp.but_cancel = dlg.submissionGrp.add('button', undefined, 'Cancel');
 
-	dlg.submissionGrp.but_apply.onClick = handleApply;
+	dlg.submissionGrp.but_apply.onClick = function() { handleApply() };
 
-	function handleApply() {
-		var folderSource = $.includePath;
-		replaceHtmlText(folderSource+"/HTML/300x250/index.html",dlg.nameEntry.retailerNameGrp.entry01.text);
-		replaceGifText(folderSource+"/GIF/AnimatedGIF_test.psd",dlg.nameEntry.retailerNameGrp.entry01.text);
-	}
-
-	var userOptions = {};
+	/*function handleApply() {
+		replaceHtmlText(_folderSource+"/HTML/300x250/index.html",dlg.nameEntry.retailerNameGrp.entry01.text);
+		replaceGifText(_folderSource+"/GIF/AnimatedGIF_test.psd",dlg.nameEntry.retailerNameGrp.entry01.text);
+	}*/
 
 	dlg.center();
-	var dlgResult = dlg.show(); // 1 = ok, 2 = cancel
+	dlg.show(); // 1 = ok, 2 = cancel
 
-
-	if ( dlgResult == 2 ) {
-        return false;
-    }
-
-    return userOptions;
 
 }
 
-function handleTextChange(t) {
+function handleCheck(sel,chk) {
+    _userOptions[sel] = chk.value;
+}
+
+function handleApply() {
+
+    for(var i=0; i<_exportFormats.length; i++) {
+        if(_userOptions["sizeOption"+i] == true) {
+
+            // 3. Open and amend GIFs for all selected formats (error check: text layer exists)
+            // 4. Save-for-web GIFs in target folder and close
+            replaceHtmlText(_folderSource+"/source/"+_exportFormats[i].size.replace(/ /g, "")+_manifest[0].title+"/"+_manifest[0].files[0],
+                            _userOptions['retailerName']);
+
+
+            // 5. Find and replace copy in all selected HTML5 units (error checks: files exist, source copy exists)
+            // 6. Save HTML5 in target folder (error check: target folder exists, file saved)
+
+        }
+    }
+    // 7. ZIP output folder and conclude.
+
+}
+
+/// REDUNDANT, should bin
+/*function handleTextChange(t) {
 
 	alert(t);
 
@@ -149,12 +177,19 @@ function handleTextChange(t) {
 	var textTarget = (thisDoc.layers.getByName('TextToChange'));
 	textTarget.textItem.contents = t;
 
-}
+}*/
 
 function checkFonts() {
 
 	var missingFontsList = _reqFonts.slice(0);
 	var numInstalledFonts = app.fonts.length;
+
+    //check all fonts beginning with 'V'
+    /*for (var i=0; i<numInstalledFonts; i++) {
+        if(app.fonts[i].postScriptName.indexOf('V') == 0) {
+            alert(app.fonts[i].postScriptName);
+        }
+    }*/
 
 	for (var i=0; i<_reqFonts.length; i++) {
 
@@ -176,6 +211,9 @@ function checkFonts() {
 
 	
 	if (missingFontsList.length > 0) {
+
+        // TO DO: - The 'installed fonts' list doesn't seem to update without app restart. Either need to fix process or include in alert.
+
 		var errorString = "The following fonts seem to be missing. Please install/activate and try again: ";
 		for (var i=0; i<missingFontsList.length; i++) {
 			errorString += "\n"+missingFontsList[i];
@@ -187,10 +225,81 @@ function checkFonts() {
 }
 
 
+function checkFilesAndFolders(manifest, reqSizes) {
+
+
+    for (var i=0; i<reqSizes; i++) {
+
+        // Check folder of required size exists
+        var sizeNoSpaces = _exportFormats[i].size.replace(/ /g, "");
+        var sizePath = _folderSource+"/source/"+sizeNoSpaces;  // eg "X:/Banners/728x90"
+        check(path, "folder");
+
+        // Check each sub-folder exists
+        for(var j=0; j<manifest.length; j++) {
+
+            var folderPath = sizePath+"/"+manifest[j].title; // eg "X:/Banners/728x90/HTML"
+            check(folderPath, "folder");
+
+            for(var k=0; k<manifest[j].files.length; k++) {
+
+                var filePath = folderPath+"/"+manifest[j].files[k]; // eg "X:/Banners/728x90/HTML/index.html"
+                check(filePath, "file");
+
+            }
+
+        }
+
+    }
+
+    function check(obj,typ) {
+
+        var missingFolders = [];
+        var missingFiles = [];
+
+        var fileOrFolder = Folder(obj);
+
+        // Looking for folders?
+        if(typ === 'folder') {
+            // If it's a file, or it doesn't exist, complain:
+            if(fileOrFolder.constructor != Folder || fileOrFolder.exists == false) {
+                missingFolders.push(obj.replace(_folderSource,""));
+            }
+        } else if (typ === 'file') {
+            // If it's a folder, or it doesn't exist, complain:
+            if(fileOrFolder.constructor == Folder || fileOrFolder.exists == false) {
+                missingFiles.push(obj.replace(_folderSource,""));
+            }
+        }
+
+        // DUH this will always only ever throw the first error that it comes across (rather than a list of all missing files), as the check is called by an external loop.
+        // But, eh, whatever. At the moment there's only one necessary file in each folder anyway, so it's not a massive problem.
+
+        if(missingFolders.length > 0) {
+            var folderErrorString = "The following folder(s) appear to be missing. Please check before continuing:";
+            for(var i=0; i<missingFolders.length; i++) {
+                folderErrorString += "\n"+missingFolders[i];
+            }
+            throw folderErrorString;
+        }
+
+        if(missingFiles.length > 0) {
+            var fileErrorString = "The following file(s) appear to be missing. Please check before continuing:";
+            for(var j=0; j<missingFiles.length; j++) {
+                fileErrorString += "\n"+missingFiles[j];
+            }
+            throw fileErrorString;
+        }
+
+    }
+
+}
+
+
 
 function replaceHtmlText(targetFile,newText) {
 	var file = new File(targetFile);
-	if (!(file instanceof File)) { throw "HTML is not a file!" };
+
 	file.open("r");
 	var origText = file.read();
 	file.open("w");
@@ -214,7 +323,9 @@ function replaceGifText(targetFile,newText) {
 	var saveIt = SFW();
 	if(saveIt === true) {
 		doc.close(SaveOptions.DONOTSAVECHANGES);
-	}
+	} else {
+        throw "Error saving animated GIF!";
+    }
 }
 
 
@@ -248,7 +359,7 @@ function SFW(format) {
     var desc2 = new ActionDescriptor();
     desc2.putEnumerated(cTID('Op  '), cTID('SWOp'), cTID('OpSa'));
     desc2.putBoolean(cTID('DIDr'), true);
-    desc2.putPath(cTID('In  '), new File($.includePath+"/Output/"));
+    desc2.putPath(cTID('In  '), new File($.includePath+"../Output/Backup/"));
     desc2.putString(cTID('ovFN'), "testOut.gif");
     desc2.putEnumerated(cTID('Fmt '), cTID('IRFm'), cTID('GIFf'));
     desc2.putBoolean(cTID('Intr'), false);
@@ -365,7 +476,7 @@ function SFW(format) {
   if (runit === true) {
 		return true;
 	} else {
-		throw "Error saving animated GIF"
+		return false;
 	};
 };
 
