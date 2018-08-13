@@ -11,7 +11,9 @@ if (typeof Array.prototype.indexOf != "function") {
 
 const _folderSource = $.includePath; // The current folder location
 
-const _ScriptTitle = "Volvo Q3 Banner Automation";
+const _CarModel = "Volvo XC60 Q3"
+
+const _ScriptTitle = _CarModel+" Banner Automation";
 
 // Default required fonts for Volvo creative. Not all may be needed for any given banner, but safer to ensure all are available.
 const _reqFonts = ["VolvoBroadPro", "VolvoSansPro", "VolvoSansPro-Bold", "VolvoSansPro-Light", "VolvoSansPro-Medium"];
@@ -57,6 +59,7 @@ function main() {
 
 	// TO DO:
 	// generate procedural flow for this function:
+    checkOS();
 
 	// DONE! 1. ensure fonts are loaded
 	checkFonts();
@@ -80,7 +83,7 @@ function getUserOptions() {
 
 	dlg.introGrp = dlg.add('group', undefined);
 	dlg.introGrp.alignment = 'left';
-	dlg.introGrp.introText = dlg.introGrp.add('statictext', undefined, 'Here you can customise your banners according to your specific requirements...');
+	dlg.introGrp.introText = dlg.introGrp.add('statictext', undefined, 'Enter all relevant fields and choose which sizes you require, then click \"Apply\"');
 
 
 
@@ -107,7 +110,7 @@ function getUserOptions() {
 	dlg.nameEntry.businessNameGrp.label02 = dlg.nameEntry.businessNameGrp.add('statictext', undefined, 'Legal business name:');
 	dlg.nameEntry.businessNameGrp.entry02 = dlg.nameEntry.businessNameGrp.add('edittext', undefined, '');
 	dlg.nameEntry.businessNameGrp.entry02.characters = 30;
-    _userOptions['businessName'] = dlg.nameEntry.businessNameGrp.entry02.value;
+    dlg.nameEntry.businessNameGrp.entry02.onChanging = function() { _userOptions['businessName'] = dlg.nameEntry.businessNameGrp.entry02.text }
 
 
 
@@ -127,7 +130,7 @@ function getUserOptions() {
 	dlg.submissionGrp = dlg.add('group', undefined);
 	dlg.submissionGrp.alignment = 'right';
 	dlg.submissionGrp.but_apply = dlg.submissionGrp.add('button', undefined, 'Apply changes');
-	//dlg.submissionGrp.but_ok = dlg.submissionGrp.add('button', undefined, 'OK');
+	dlg.submissionGrp.but_ok = dlg.submissionGrp.add('button', undefined, 'OK');
 	dlg.submissionGrp.but_cancel = dlg.submissionGrp.add('button', undefined, 'Cancel');
 
 	dlg.submissionGrp.but_apply.onClick = function() { handleApply() };
@@ -149,47 +152,48 @@ function handleCheck(sel,chk) {
 
 function handleApply() {
 
+    app.system( "mkdir -p "+ _folderSource + "/_temp");
+
+    //alert(app.systemInformation);
+
     for(var i=0; i<_exportFormats.length; i++) {
+
+        //alert(_userOptions["sizeOption"+i]);
+
         if(_userOptions["sizeOption"+i] == true) {
+
+            var size = _exportFormats[i].size.replace(/ /g, "");
+            var sizePath = _folderSource+"/source/"+size;
 
             // 3. Open and amend GIFs for all selected formats (error check: text layer exists)
             // 4. Save-for-web GIFs in target folder and close
-            replaceHtmlText(_folderSource+"/source/"+_exportFormats[i].size.replace(/ /g, "")+_manifest[0].title+"/"+_manifest[0].files[0],
-                            _userOptions['retailerName']);
-
+            replaceGifText(sizePath+"/"+_manifest[1].title+"/"+_manifest[1].files[0], sizePath+"/"+_manifest[1].title, size);
 
             // 5. Find and replace copy in all selected HTML5 units (error checks: files exist, source copy exists)
             // 6. Save HTML5 in target folder (error check: target folder exists, file saved)
+            replaceHtmlText(sizePath+"/"+_manifest[0].title+"/"+_manifest[0].files[0], sizePath+"/"+_manifest[0].title, size);
 
         }
     }
+
+    var dt = new Date();
+    var dtString = "_"+dblDigit(dt.getFullYear())+dblDigit(dt.getMonth())+dblDigit(dt.getDate())+"_"+dblDigit(dt.getHours())+dblDigit(dt.getMinutes());
+
     // 7. ZIP output folder and conclude.
+    app.system( "mkdir -p "+_folderSource+"/Output");
+    app.system( "cd "+_folderSource+"/_temp; zip -r "+_folderSource+"/Output/"+_CarModel.replace(/ /g,"_")+dtString+".zip *");
+    app.system( "rm -rf "+_folderSource+"/_temp");
+
+    alert("Zip is ready! Check the Output folder");
+
 
 }
 
-/// REDUNDANT, should bin
-/*function handleTextChange(t) {
-
-	alert(t);
-
-	// NB Needs error testing for the document title, contents etc.
-	var thisDoc = app.activeDocument;
-	var textTarget = (thisDoc.layers.getByName('TextToChange'));
-	textTarget.textItem.contents = t;
-
-}*/
 
 function checkFonts() {
 
 	var missingFontsList = _reqFonts.slice(0);
 	var numInstalledFonts = app.fonts.length;
-
-    //check all fonts beginning with 'V'
-    /*for (var i=0; i<numInstalledFonts; i++) {
-        if(app.fonts[i].postScriptName.indexOf('V') == 0) {
-            alert(app.fonts[i].postScriptName);
-        }
-    }*/
 
 	for (var i=0; i<_reqFonts.length; i++) {
 
@@ -297,30 +301,34 @@ function checkFilesAndFolders(manifest, reqSizes) {
 
 
 
-function replaceHtmlText(targetFile,newText) {
+function replaceHtmlText(targetFile,path,size) {
 	var file = new File(targetFile);
 
 	file.open("r");
 	var origText = file.read();
 	file.open("w");
 
-	var editText = origText.replace(/(<div id="titleText">(.*)<\/div>)/g,"<div id=\"titleText\">"+newText+"</div>");
-	// regex find the div element with the retailer name (by element rather than content, in case it's already changed from default)
+	var edit1 = origText.replace(/(<span class="retailer">(.*?)<\/span>)/g,"<span class=\"retailer\">"+_userOptions['retailerName']+"</span>");
+    var edit2 = edit1.replace(/(<span class="legal">(.*?)<\/span>)/g,"<span class=\"legal\">"+_userOptions['businessName']+"</span>");
+	// regex find the div element with the retailer/business name (by element rather than content, in case it's already changed from default)
 
-	file.write(editText);
+	file.write(edit2);
 	file.close();
-	alert("HTML file updated!");
+
+    app.system( "cp -R " + path + " "+ _folderSource + "/_temp/" + size );
+
+	//alert("HTML file updated!");
 }
 
-function replaceGifText(targetFile,newText) {
+function replaceGifText(targetFile,path,size) {
 	var fileToEdit = new File(targetFile);
 	var doc = app.open(fileToEdit);
 	app.activeDocument = doc;
 	var textLayerToEdit = doc.layerSets.getByName("RetailerName").layers[0];
-	textLayerToEdit.textItem.contents = "AT "+newText;
-	alert("GIF file updated!");
+	textLayerToEdit.textItem.contents = "AT "+_userOptions['retailerName'];
+	//alert("GIF file updated!");
 	//saveForWeb(doc);
-	var saveIt = SFW();
+	var saveIt = SFW(path,size);
 	if(saveIt === true) {
 		doc.close(SaveOptions.DONOTSAVECHANGES);
 	} else {
@@ -328,9 +336,19 @@ function replaceGifText(targetFile,newText) {
     }
 }
 
+function makeZip() {
+
+}
+
 
 
 ///// UTILS
+
+function checkOS() {
+    if(app.systemInformation.indexOf("Operating System: Mac") == -1) {
+        throw "Unfortunately this generator only works on Mac for now..."
+    }
+}
 
 function checkAlreadyOpen(file) {
 	if (app.documents.length > 0) {
@@ -342,12 +360,16 @@ function checkAlreadyOpen(file) {
 	}
 }
 
+function dblDigit(n) {
+    return ("0"+n).slice(-2);
+}
+
 
 //
 //==================== GIF 'Save For Web' action (converted using xTools) ==============
 //
 
-function SFW(format) {
+function SFW(path,size) {
 	cTID = function(s) { return app.charIDToTypeID(s); };
 	sTID = function(s) { return app.stringIDToTypeID(s); };
   // Export
@@ -359,8 +381,8 @@ function SFW(format) {
     var desc2 = new ActionDescriptor();
     desc2.putEnumerated(cTID('Op  '), cTID('SWOp'), cTID('OpSa'));
     desc2.putBoolean(cTID('DIDr'), true);
-    desc2.putPath(cTID('In  '), new File($.includePath+"../Output/Backup/"));
-    desc2.putString(cTID('ovFN'), "testOut.gif");
+    desc2.putPath(cTID('In  '), new File(path+"/output/"));
+    desc2.putString(cTID('ovFN'), size+"_backup.gif");
     desc2.putEnumerated(cTID('Fmt '), cTID('IRFm'), cTID('GIFf'));
     desc2.putBoolean(cTID('Intr'), false);
     desc2.putEnumerated(cTID('RedA'), cTID('IRRd'), cTID('Adpt'));
@@ -474,6 +496,7 @@ function SFW(format) {
   var runit = step1(); // Export
 
   if (runit === true) {
+        app.system( "mkdir -p " + _folderSource + "/_temp/Backups" + "&& cp " + path + "/output/" + size + "_backup.gif" + " " + _folderSource + "/_temp/Backups/" );
 		return true;
 	} else {
 		return false;
