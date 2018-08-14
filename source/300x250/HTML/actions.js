@@ -24,9 +24,9 @@ function doBanner() {
 
 	function frame_3() {
 		TweenMax.to(d('headline2'), 0.5, {autoAlpha:0});
-		TweenMax.to(d('headline3'), 0.5, {autoAlpha:1, delay:1});
-		TweenMax.to(d('subhead3'), 0.5, {autoAlpha:1, delay:2});
-		TweenMax.delayedCall(3.5, frame_4);
+		TweenMax.to(d('headline3'), 0.5, {autoAlpha:1, delay:0.5});
+		TweenMax.to(d('subhead3'), 0.5, {autoAlpha:1, delay:1.5});
+		TweenMax.delayedCall(3, frame_4);
 	}
 
 	function frame_4() {
@@ -41,16 +41,16 @@ function doBanner() {
 
 	function frame_5() {
 		TweenMax.to([d('headline4'),d('award4'),d('ctaContainer')], 0.5, {autoAlpha:0});
-		TweenMax.to([d('headline5'),d('carsolo')], 0.5, {autoAlpha:1, delay:1});
-		TweenMax.to([d('financeDetail'),d('caveatButton')], 0.5, {autoAlpha:1, delay:1.5});
-		TweenMax.delayedCall(1.5, handleCaveat);
-		TweenMax.delayedCall(4.5, frame_6);
+		TweenMax.to([d('headline5'),d('carsolo')], 0.5, {autoAlpha:1, delay:0.5});
+		TweenMax.to([d('financeDetail'),d('caveatButton')], 0.5, {autoAlpha:1, delay:1});
+		TweenMax.delayedCall(1, handleCaveat);
+		TweenMax.delayedCall(4, frame_6);
 	}
 
 	function frame_6() {
 		TweenMax.to([d('headline5'),d('financeDetail')], 0.5, {autoAlpha:0});
-		TweenMax.to([d('headline6'),d('retailer')], 0.5, {autoAlpha:1, delay:1});
-		TweenMax.to([d('ctaContainer'),d('caveatBtnContainer')], 0.5, {autoAlpha:1, delay:2});
+		TweenMax.to([d('headline6'),d('retailer')], 0.5, {autoAlpha:1, delay:0.5});
+		TweenMax.to([d('ctaContainer'),d('caveatBtnContainer')], 0.5, {autoAlpha:1, delay:1.5});
 
 	}
 
