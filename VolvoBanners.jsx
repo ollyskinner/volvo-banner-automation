@@ -18,12 +18,12 @@ var getKeys = function(o) {
 
 var isMac = checkIsMac();
 var isWindows = checkIsWindows();
-if(!isMac && !isWindows) { throw "Your operating system is not supported. This software requires OSX/macOS, or Windows version 8 or 10" }
+if(!isMac && !isWindows) { throw "Your operating system is too old/weird. This software requires OSX/macOS, or Windows version 8 or 10" }
 
 const _folderSource = $.includePath; // The current folder location
 
-const _slash = (isMac) ? "/" : "\\";
-const _parentFolder = _folderSource.substring(0, _folderSource.lastIndexOf(_slash)); // The parent folder (for storing prefs file)
+const _SLASH = (isMac) ? "/" : "\\";
+const _parentFolder = _folderSource.substring(0, _folderSource.lastIndexOf(_SLASH)); // The parent folder (for storing prefs file)
 
 const _CarModel = "Volvo XC60 Q3"
 
@@ -149,7 +149,7 @@ function getUserOptions() {
 	dlg.orientation = 'column';
     dlg.alignChildren = 'right';
 
-    dlg.heroImage = dlg.add('image', [0,0,400,100], File(_folderSource+'/source/res/logo.png'));
+    dlg.heroImage = dlg.add('image', [0,0,400,100], File(_folderSource+_SLASH+'source'+_SLASH+'res'+_SLASH+'logo.png'));
 
     dlg.introGrp = dlg.add('group', undefined);
     dlg.introGrp.alignment = 'center';
@@ -223,48 +223,63 @@ function handleCheck(sel,chk) {
 
 function handleApply(dlg) {
 
+    // TO DO: No point running if no sizes are checked:
+    var anySizesChecked = false;
+
+    if(isMac) { app.system( "mkdir -p "+_folderSource+"/_temp");
+    } else if(isWindows) { app.system( "mkdir "+_folderSource+"\\_temp"); }
+
     // Before anything else, validate the HTML entry field to make sure it's a legitimate address - no careful checking, just strip any protocol/scheme make it scheme-relative.
     var url = validateHtml(_userOptions['clickTag']);
-
-    app.system( "mkdir -p "+ _folderSource + "/_temp");
 
     for(var i=0; i<_exportFormats.length; i++) {
 
         if(_userOptions["sizeOption"+i] == true) {
 
+            anySizesChecked = true;
+
             var size = _exportFormats[i].size.replace(/ /g, "");
-            var sizePath = _folderSource+"/source/"+size;
+            var sizePath = _folderSource+_SLASH+"source"+_SLASH+size;
 
             // 3. Open and amend GIFs for all selected formats (error check: text layer exists)
             // 4. Save-for-web GIFs in target folder and close
-            replaceGifText(sizePath+"/"+_manifest[1].title+"/"+_manifest[1].files[0], sizePath+"/"+_manifest[1].title, size);
+            replaceGifText(sizePath+_SLASH+_manifest[1].title+_SLASH+_manifest[1].files[0], sizePath+_SLASH+_manifest[1].title, size);
 
             // 5. Find and replace copy in all selected HTML5 units (error checks: files exist, source copy exists)
             // 6. Save HTML5 in target folder (error check: target folder exists, file saved)
             // NEW! Add a hardcoded clickTag if required (perhaps should be greyed out by a checkbox?)
-            replaceHtmlText(sizePath+"/"+_manifest[0].title+"/"+_manifest[0].files[0], sizePath+"/"+_manifest[0].title, size, url);
+            replaceHtmlText(sizePath+_SLASH+_manifest[0].title+_SLASH+_manifest[0].files[0], sizePath+_SLASH+_manifest[0].title, size, url);
 
         }
     }
 
-    var dt = new Date();
-    var dtString = "_"+dblDigit(dt.getFullYear())+dblDigit(dt.getMonth())+dblDigit(dt.getDate())+"_"+dblDigit(dt.getHours())+dblDigit(dt.getMinutes());
+    if(anySizesChecked) {
 
-    // 7. ZIP output folder and conclude.
-    if(isMac) {
-        app.system( "mkdir -p "+_folderSource+"/Output");
-        app.system( "cd "+_folderSource+"/_temp; zip -r "+_folderSource+"/Output/"+_CarModel.replace(/ /g,"_")+dtString+".zip *");
-        app.system( "rm -rf "+_folderSource+"/_temp");
-    } else if(isWindows) {
-        app.system( "New-Item -Path " +_folderSource+ "\\Output");
+        var dt = new Date();
+        var dtString = "_"+dblDigit(dt.getFullYear())+dblDigit(dt.getMonth())+dblDigit(dt.getDate())+"_"+dblDigit(dt.getHours())+dblDigit(dt.getMinutes());
 
+        // 7. ZIP output folder and conclude.
+        if(isMac) {
+            app.system( "mkdir -p "+_folderSource+"/_temp");
+            app.system( "mkdir -p "+_folderSource+"/Output");
+            app.system( "cd "+_folderSource+"/_temp; zip -r "+_folderSource+"/Output/"+_CarModel.replace(/ /g,"_")+dtString+".zip *");
+            app.system( "rm -rf "+_folderSource+"/_temp");
+        } else if(isWindows) {
+            app.system( "mkdir "+_folderSource+"\\_temp");
+            app.system( "mkdir "+_folderSource+"\\Output");
+            app.system( "PowerShell -command Compress-Archive -Path "+_folderSource+"\\_temp\\* -DestinationPath "+_folderSource+"\\Output\\"+_CarModel.replace(/ /g,"_")+dtString+".zip");
+            app.system( "rmdir /s/q "+_folderSource+"\\_temp");
+        }
+
+        alert("Zip is ready! Check the Output folder");
+
+        savePrefs();
+
+        dlg.active = true;
+
+    } else {
+        alert("No sizes are selected!");
     }
-
-    alert("Zip is ready! Check the Output folder");
-
-    savePrefs();
-
-    dlg.active = true;
 
 
 }
@@ -316,18 +331,18 @@ function checkFilesAndFolders(manifest, reqSizes) {
 
         // Check folder of required size exists
         var sizeNoSpaces = _exportFormats[i].size.replace(/ /g, "");
-        var sizePath = _folderSource+"/source/"+sizeNoSpaces;  // eg "X:/Banners/728x90"
+        var sizePath = _folderSource+_SLASH+"source"+_SLASH+sizeNoSpaces;  // eg "X:/Banners/728x90"
         check(sizePath, "folder");
 
         // Check each sub-folder exists
         for(var j=0; j<manifest.length; j++) {
 
-            var folderPath = sizePath+"/"+manifest[j].title; // eg "X:/Banners/728x90/HTML"
+            var folderPath = sizePath+_SLASH+manifest[j].title; // eg "X:/Banners/728x90/HTML"
             check(folderPath, "folder");
 
             for(var k=0; k<manifest[j].files.length; k++) {
 
-                var filePath = folderPath+"/"+manifest[j].files[k]; // eg "X:/Banners/728x90/HTML/index.html"
+                var filePath = folderPath+_SLASH+manifest[j].files[k]; // eg "X:/Banners/728x90/HTML/index.html"
                 check(filePath, "file");
 
             }
@@ -399,7 +414,11 @@ function replaceHtmlText(targetFile,path,size,url) {
 	file.write(edit3);
 	file.close();
 
-    app.system( "cp -R " + path + " "+ _folderSource + "/_temp/" + size );
+    if(isMac) {
+        app.system( "cp -R " + path + " "+ _folderSource + "/_temp/" + size );
+    } else if(isWindows) {
+        app.system( "xcopy /e "+ path + " "+ _folderSource + "\\_temp\\" + size+"\\")
+    }
 
 }
 
@@ -415,10 +434,13 @@ function replaceGifText(targetFile,path,size) {
 
 	textLayerToEdit.textItem.contents = "AT "+lineBreak+_userOptions['retailerName'];
 
-    var cta = doc.layerSets.getByName("CTA");
-    // count incidence of (manually included) line breaks, move CTA group accordingly.
-    var numLines = _userOptions['retailerName'].match(/(\\r)/g).length;
-    cta.translate(new UnitValue(0, "px"), new UnitValue(14*numLines, "px"));
+    if(size.indexOf("160x600") > -1) {
+        var cta = doc.layerSets.getByName("CTA");
+        // count incidence of (manually included) line breaks, move CTA group accordingly.
+        var lines = _userOptions['retailerName'].match(/(\\r)/g);
+        var numLines = (lines != null) ? lines.length : 0;
+        cta.translate(new UnitValue(0, "px"), new UnitValue(14*numLines, "px"));
+    }
 
 	var saveIt = SFW(path,size);
 	if(saveIt === true) {
@@ -468,14 +490,18 @@ function SFW(path,size) {
     if (enabled != undefined && !enabled)
       return;
 
-    app.system( "mkdir -p "+ path + "/output");
+    if(isMac) {
+        app.system( "mkdir -p "+ path + "/output");
+    } else if(isWindows) {
+        app.system( "mkdir "+ path + "\\output");
+    }
 
     var dialogMode = (withDialog ? DialogModes.ALL : DialogModes.NO);
     var desc1 = new ActionDescriptor();
     var desc2 = new ActionDescriptor();
     desc2.putEnumerated(cTID('Op  '), cTID('SWOp'), cTID('OpSa'));
     desc2.putBoolean(cTID('DIDr'), true);
-    desc2.putPath(cTID('In  '), new File(path+"/output/"));
+    desc2.putPath(cTID('In  '), new File(path+_SLASH+"output"+_SLASH));
     desc2.putString(cTID('ovFN'), size+"_backup.gif");
     desc2.putEnumerated(cTID('Fmt '), cTID('IRFm'), cTID('GIFf'));
     desc2.putBoolean(cTID('Intr'), false);
@@ -587,15 +613,21 @@ function SFW(path,size) {
     return true;
   };
 
-  var runit = step1(); // Export
+    var runit = step1(); // Export
 
-  if (runit === true) {
-        app.system( "mkdir -p " + _folderSource + "/_temp/Backups" + "&& cp " + path + "/output/" + size + "_backup.gif" + " " + _folderSource + "/_temp/Backups/" );
-        app.system( "rm -rf "+ path + "/output");
+    if (runit === true) {
+        if(isMac) {
+            app.system( "mkdir -p " + _folderSource + "/_temp/Backups" + "&& cp " + path + "/output/" + size + "_backup.gif" + " " + _folderSource + "/_temp/Backups/" );
+            app.system( "rm -rf "+ path + "/output");
+        } else if(isWindows) {
+            app.system( "mkdir " + _folderSource + "\\_temp\\Backups" );
+            app.system( "xcopy "+path+"\\output\\"+size+"_backup.gif"+" "+_folderSource+"\\_temp\\Backups\\");
+            app.system( "rmdir "+path+"\\output");
+        }
 		return true;
-	} else {
-		return false;
-	};
+    } else {
+    	return false;
+    };
 };
 
 
