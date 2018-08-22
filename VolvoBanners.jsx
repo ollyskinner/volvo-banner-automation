@@ -4,12 +4,26 @@ if (typeof Array.prototype.indexOf != "function") {
         for(var i = 0; i < this.length; i++) if(el === this[i]) return i;  
         return -1;  
         }  
-}  
+}
+
+// And one for Object keys FFS
+var getKeys = function(o) {
+    var arr = [];
+    for(key in o) { arr.push(key); }
+    return arr;
+}
 
 
 #target photoshop;
 
+var isMac = checkIsMac();
+var isWindows = checkIsWindows();
+if(!isMac && !isWindows) { throw "Your operating system is not supported. This software requires OSX/macOS, or Windows version 8 or 10" }
+
 const _folderSource = $.includePath; // The current folder location
+
+const _slash = (isMac) ? "/" : "\\";
+const _parentFolder = _folderSource.substring(0, _folderSource.lastIndexOf(_slash)); // The parent folder (for storing prefs file)
 
 const _CarModel = "Volvo XC60 Q3"
 
@@ -18,7 +32,7 @@ const _ScriptTitle = _CarModel+" Banner Automation";
 // Default required fonts for Volvo creative. Not all may be needed for any given banner, but safer to ensure all are available.
 const _reqFonts = ["VolvoBroadPro", "VolvoSansPro", "VolvoSansPro-Bold", "VolvoSansPro-Light", "VolvoSansPro-Medium"];
 
-const _exportFormats = [{size:"300 x 250",name:"MPU"},{size:"160 x 600",name:"Wide Sky"}/*,{size:"728 x 90",name:"Leaderboard"}*/];
+const _exportFormats = [{size:"300 x 250",name:"MPU"},{size:"160 x 600",name:"Wide Sky"},{size:"728 x 90",name:"Leaderboard"}];
 
 const _manifest = [
                     {   title:  "HTML",
@@ -31,6 +45,7 @@ const _manifest = [
 
 var _userOptions = {};
 
+const _prefsTitle = "VolvoPrefs";
 
 var scriptResult;
 
@@ -59,7 +74,9 @@ function main() {
 
 	// TO DO:
 	// generate procedural flow for this function:
-    checkOS();
+
+    // DONE! Prelim - ensure this is being run on a Mac (managing file system and zip creation is much easier in OSX)
+    //checkOS();
 
 	// DONE! 1. ensure fonts are loaded
 	checkFonts();
@@ -69,6 +86,8 @@ function main() {
     checkFilesAndFolders(_manifest, _exportFormats.length);
 
 	// 3. Build interface and capture user input
+    getPrefs();
+
 	getUserOptions();
 
     // steps 4+ are in handleApply()
@@ -76,55 +95,111 @@ function main() {
 
 }
 
+
+
+function getPrefs() {
+
+    // If there are no prefs, there are no prefs
+    var prefs;
+
+    // Wrapping this in a try block since ES is a dick about returning undefined values.
+    try { prefs = app.getCustomOptions(_prefsTitle);
+    } catch(e) {}
+
+    // If prefs exists, retrieve
+    if(typeof prefs != "undefined") {
+
+        // For each recorded preference, update the userOptions object to match.
+        for(var i=0; i<prefs.count; i++) {
+
+            var k = app.typeIDToStringID(prefs.getKey(i));
+            var v = prefs.getString(prefs.getKey(i));
+            _userOptions[k] = v;
+
+        }
+
+    }
+
+
+}
+
+function savePrefs() {
+
+    var prefs = new ActionDescriptor();
+
+    // create an object that copies all key-value pairs from userOptions.
+    var options = getKeys(_userOptions);
+    var len = options.length;
+    for(var i=0; i<len; i++) {
+        var k = app.stringIDToTypeID(options[i]);
+        prefs.putString(k, _userOptions[options[i]]);
+    }
+
+    // save and return.
+    app.putCustomOptions(_prefsTitle, prefs, true);
+
+}
+
+
+
+
 function getUserOptions() {
 
 	var dlg = new Window('dialog', _ScriptTitle);
-	//dlg.size = {width: 600, height:600};
+	dlg.orientation = 'column';
+    dlg.alignChildren = 'right';
 
-	dlg.introGrp = dlg.add('group', undefined);
-	dlg.introGrp.alignment = 'left';
-	dlg.introGrp.introText = dlg.introGrp.add('statictext', undefined, 'Enter all relevant fields and choose which sizes you require, then click \"Apply\"');
+    dlg.heroImage = dlg.add('image', [0,0,400,100], File(_folderSource+'/source/res/logo.png'));
 
-
-
-	dlg.interruptor01 = dlg.add('panel', [0,0,500,0]);
-	dlg.interruptor01.alignment = 'left';
+    dlg.introGrp = dlg.add('group', undefined);
+    dlg.introGrp.alignment = 'center';
+    dlg.introGrp.introText = dlg.introGrp.add('statictext', [0,0,400,40], 'Enter all relevant fields and choose which sizes you require, then click \"Apply changes\"', {multiline: true});
 
 
+    dlg.interruptor01 = dlg.add('panel', undefined);
+    dlg.interruptor01.size = [400, 1];
+    dlg.interruptor01.alignment = 'center';
 
-	dlg.nameEntry = dlg.add('group', undefined);
-	dlg.nameEntry.orientation = 'column';
-	dlg.nameEntry.alignChildren = 'right';
+    dlg.nameEntry = dlg.add('group', undefined);
+    dlg.nameEntry.size = [400, 90];
+    dlg.nameEntry.orientation = 'column';
+    dlg.nameEntry.alignChildren = 'right';
 
-	dlg.nameEntry.retailerNameGrp = dlg.nameEntry.add('group', undefined);
-	dlg.nameEntry.retailerNameGrp.orientation = 'row';
+    dlg.nameEntry.retailerNameGrp = dlg.nameEntry.add('group', undefined);
+    dlg.nameEntry.retailerNameGrp.orientation = 'row';
 
-	dlg.nameEntry.retailerNameGrp.label01 = dlg.nameEntry.retailerNameGrp.add('statictext', undefined, 'Retailer name:');
-	dlg.nameEntry.retailerNameGrp.entry01 = dlg.nameEntry.retailerNameGrp.add('edittext', undefined, '');
-	dlg.nameEntry.retailerNameGrp.entry01.characters = 30;
-    dlg.nameEntry.retailerNameGrp.entry01.onChanging = function() { _userOptions['retailerName'] = dlg.nameEntry.retailerNameGrp.entry01.text }
-	
-	dlg.nameEntry.businessNameGrp = dlg.nameEntry.add('group', undefined);
-	dlg.nameEntry.businessNameGrp.orientation = 'row';
+    dlg.nameEntry.retailerNameGrp.label01 = dlg.nameEntry.retailerNameGrp.add('statictext', undefined, 'Retailer name:');
+    dlg.nameEntry.retailerNameGrp.entry01 = dlg.nameEntry.retailerNameGrp.add('edittext', undefined, (_userOptions['retailerName'] || ''));
+    dlg.nameEntry.retailerNameGrp.entry01.characters = 30;
+    dlg.nameEntry.retailerNameGrp.entry01.onChanging = function(e) { _userOptions['retailerName'] = dlg.nameEntry.retailerNameGrp.entry01.text }
 
-	dlg.nameEntry.businessNameGrp.label02 = dlg.nameEntry.businessNameGrp.add('statictext', undefined, 'Legal business name:');
-	dlg.nameEntry.businessNameGrp.entry02 = dlg.nameEntry.businessNameGrp.add('edittext', undefined, '');
-	dlg.nameEntry.businessNameGrp.entry02.characters = 30;
-    dlg.nameEntry.businessNameGrp.entry02.onChanging = function() { _userOptions['businessName'] = dlg.nameEntry.businessNameGrp.entry02.text }
+    dlg.nameEntry.businessNameGrp = dlg.nameEntry.add('group', undefined);
+    dlg.nameEntry.businessNameGrp.orientation = 'row';
 
+    dlg.nameEntry.businessNameGrp.label02 = dlg.nameEntry.businessNameGrp.add('statictext', undefined, 'Legal business name:');
+    dlg.nameEntry.businessNameGrp.entry02 = dlg.nameEntry.businessNameGrp.add('edittext', undefined, (_userOptions['businessName'] || ''));
+    dlg.nameEntry.businessNameGrp.entry02.characters = 30;
+    dlg.nameEntry.businessNameGrp.entry02.onChanging = function(e) { _userOptions['businessName'] = dlg.nameEntry.businessNameGrp.entry02.text }
 
+    dlg.nameEntry.clickTagGrp = dlg.nameEntry.add('group', undefined);
+    dlg.nameEntry.clickTagGrp.orientation = 'row';
+
+    dlg.nameEntry.clickTagGrp.label03 = dlg.nameEntry.clickTagGrp.add('statictext', undefined, 'Target URL - http://');
+    dlg.nameEntry.clickTagGrp.entry03 = dlg.nameEntry.clickTagGrp.add('edittext', undefined, (_userOptions['clickTag'] || ''));
+    dlg.nameEntry.clickTagGrp.entry03.characters = 30;
+    dlg.nameEntry.clickTagGrp.entry03.onChanging = function(e) { _userOptions['clickTag'] = dlg.nameEntry.clickTagGrp.entry03.text }
 
     // Required sizes selection group
-    dlg.requiredSizesPnl = dlg.add('panel', [0,0,300,60+(30*_exportFormats.length)], "Choose required sizes");
-    dlg.requiredSizesPnl.alignment = 'left';
-	for( var i=0; i<_exportFormats.length; i++) {
+    dlg.requiredSizesPnl = dlg.add('panel', [0,0,400,60+(30*_exportFormats.length)], "Choose required sizes");
+    dlg.requiredSizesPnl.alignment = 'center';
+    for( var i=0; i<_exportFormats.length; i++) {
         var chk = dlg.requiredSizesPnl.add('checkbox', [50,30+(30*i),150,30], _exportFormats[i].size+" ("+_exportFormats[i].name+")");
         var sizeOption = 'sizeOption'+i;
         _userOptions[sizeOption] = chk.value;
         chk.onClick = (function(thisOption,thisChk) {
             return function() { handleCheck(thisOption, thisChk)}
         })(sizeOption,chk);
-	}
+    }
 
     // Submission group (Apply, OK (should mean leave but save changes?), Cancel (quit without saving));
 	dlg.submissionGrp = dlg.add('group', undefined);
@@ -133,12 +208,8 @@ function getUserOptions() {
 	dlg.submissionGrp.but_ok = dlg.submissionGrp.add('button', undefined, 'OK');
 	dlg.submissionGrp.but_cancel = dlg.submissionGrp.add('button', undefined, 'Cancel');
 
-	dlg.submissionGrp.but_apply.onClick = function() { handleApply() };
-
-	/*function handleApply() {
-		replaceHtmlText(_folderSource+"/HTML/300x250/index.html",dlg.nameEntry.retailerNameGrp.entry01.text);
-		replaceGifText(_folderSource+"/GIF/AnimatedGIF_test.psd",dlg.nameEntry.retailerNameGrp.entry01.text);
-	}*/
+	dlg.submissionGrp.but_apply.onClick = function(e) { handleApply(dlg) };
+    dlg.submissionGrp.but_ok.onClick = function(e) { savePrefs(); dlg.close(); };
 
 	dlg.center();
 	dlg.show(); // 1 = ok, 2 = cancel
@@ -150,15 +221,14 @@ function handleCheck(sel,chk) {
     _userOptions[sel] = chk.value;
 }
 
-function handleApply() {
+function handleApply(dlg) {
+
+    // Before anything else, validate the HTML entry field to make sure it's a legitimate address - no careful checking, just strip any protocol/scheme make it scheme-relative.
+    var url = validateHtml(_userOptions['clickTag']);
 
     app.system( "mkdir -p "+ _folderSource + "/_temp");
 
-    //alert(app.systemInformation);
-
     for(var i=0; i<_exportFormats.length; i++) {
-
-        //alert(_userOptions["sizeOption"+i]);
 
         if(_userOptions["sizeOption"+i] == true) {
 
@@ -171,7 +241,8 @@ function handleApply() {
 
             // 5. Find and replace copy in all selected HTML5 units (error checks: files exist, source copy exists)
             // 6. Save HTML5 in target folder (error check: target folder exists, file saved)
-            replaceHtmlText(sizePath+"/"+_manifest[0].title+"/"+_manifest[0].files[0], sizePath+"/"+_manifest[0].title, size);
+            // NEW! Add a hardcoded clickTag if required (perhaps should be greyed out by a checkbox?)
+            replaceHtmlText(sizePath+"/"+_manifest[0].title+"/"+_manifest[0].files[0], sizePath+"/"+_manifest[0].title, size, url);
 
         }
     }
@@ -180,11 +251,20 @@ function handleApply() {
     var dtString = "_"+dblDigit(dt.getFullYear())+dblDigit(dt.getMonth())+dblDigit(dt.getDate())+"_"+dblDigit(dt.getHours())+dblDigit(dt.getMinutes());
 
     // 7. ZIP output folder and conclude.
-    app.system( "mkdir -p "+_folderSource+"/Output");
-    app.system( "cd "+_folderSource+"/_temp; zip -r "+_folderSource+"/Output/"+_CarModel.replace(/ /g,"_")+dtString+".zip *");
-    app.system( "rm -rf "+_folderSource+"/_temp");
+    if(isMac) {
+        app.system( "mkdir -p "+_folderSource+"/Output");
+        app.system( "cd "+_folderSource+"/_temp; zip -r "+_folderSource+"/Output/"+_CarModel.replace(/ /g,"_")+dtString+".zip *");
+        app.system( "rm -rf "+_folderSource+"/_temp");
+    } else if(isWindows) {
+        app.system( "New-Item -Path " +_folderSource+ "\\Output");
+
+    }
 
     alert("Zip is ready! Check the Output folder");
+
+    savePrefs();
+
+    dlg.active = true;
 
 
 }
@@ -218,7 +298,7 @@ function checkFonts() {
 
         // TO DO: - The 'installed fonts' list doesn't seem to update without app restart. Either need to fix process or include in alert.
 
-		var errorString = "The following fonts seem to be missing. Please install/activate and try again: ";
+		var errorString = "The following fonts seem to be missing. Please install/activate and try again (you may need to restart Photoshop for the new fonts to be fully recognised):";
 		for (var i=0; i<missingFontsList.length; i++) {
 			errorString += "\n"+missingFontsList[i];
 		}
@@ -237,7 +317,7 @@ function checkFilesAndFolders(manifest, reqSizes) {
         // Check folder of required size exists
         var sizeNoSpaces = _exportFormats[i].size.replace(/ /g, "");
         var sizePath = _folderSource+"/source/"+sizeNoSpaces;  // eg "X:/Banners/728x90"
-        check(path, "folder");
+        check(sizePath, "folder");
 
         // Check each sub-folder exists
         for(var j=0; j<manifest.length; j++) {
@@ -301,23 +381,26 @@ function checkFilesAndFolders(manifest, reqSizes) {
 
 
 
-function replaceHtmlText(targetFile,path,size) {
+function replaceHtmlText(targetFile,path,size,url) {
 	var file = new File(targetFile);
 
 	file.open("r");
 	var origText = file.read();
 	file.open("w");
 
-	var edit1 = origText.replace(/(<span class="retailer">(.*?)<\/span>)/g,"<span class=\"retailer\">"+_userOptions['retailerName']+"</span>");
+    var retailerTemp = _userOptions['retailerName'];
+    if(size.indexOf("160x600") > -1) { retailerTemp = retailerTemp.replace(/(\\r)/g, '<br/>') };
+
+	var edit1 = origText.replace(/(<span class="retailer">(.*?)<\/span>)/g,"<span class=\"retailer\">"+retailerTemp+"</span>");
     var edit2 = edit1.replace(/(<span class="legal">(.*?)<\/span>)/g,"<span class=\"legal\">"+_userOptions['businessName']+"</span>");
+    var edit3 = edit2.replace(/(var clickTag =(.*?);)/g, "var clickTag = \""+url+"\";")
 	// regex find the div element with the retailer/business name (by element rather than content, in case it's already changed from default)
 
-	file.write(edit2);
+	file.write(edit3);
 	file.close();
 
     app.system( "cp -R " + path + " "+ _folderSource + "/_temp/" + size );
 
-	//alert("HTML file updated!");
 }
 
 function replaceGifText(targetFile,path,size) {
@@ -325,9 +408,18 @@ function replaceGifText(targetFile,path,size) {
 	var doc = app.open(fileToEdit);
 	app.activeDocument = doc;
 	var textLayerToEdit = doc.layerSets.getByName("RetailerName").layers[0];
-	textLayerToEdit.textItem.contents = "AT "+_userOptions['retailerName'];
-	//alert("GIF file updated!");
-	//saveForWeb(doc);
+
+    // The skyscraper needs a line break between 'at' and 'retailer'...
+    var lineBreak = "";
+    if(size.indexOf("160x600") > -1) { lineBreak = "\r" };
+
+	textLayerToEdit.textItem.contents = "AT "+lineBreak+_userOptions['retailerName'];
+
+    var cta = doc.layerSets.getByName("CTA");
+    // count incidence of (manually included) line breaks, move CTA group accordingly.
+    var numLines = _userOptions['retailerName'].match(/(\\r)/g).length;
+    cta.translate(new UnitValue(0, "px"), new UnitValue(14*numLines, "px"));
+
 	var saveIt = SFW(path,size);
 	if(saveIt === true) {
 		doc.close(SaveOptions.DONOTSAVECHANGES);
@@ -336,28 +428,27 @@ function replaceGifText(targetFile,path,size) {
     }
 }
 
-function makeZip() {
-
-}
 
 
 
 ///// UTILS
 
-function checkOS() {
+function checkIsWindows() {    
+  return app.systemInformation.search(/Operating System: Windows (8|10)/gi) >= 0    
+}    
+function checkIsMac() {    
+  return app.systemInformation.indexOf("Operating System: Mac") >= 0    
+}   
+
+/*function checkOS() {
     if(app.systemInformation.indexOf("Operating System: Mac") == -1) {
         throw "Unfortunately this generator only works on Mac for now..."
     }
-}
+}*/
 
-function checkAlreadyOpen(file) {
-	if (app.documents.length > 0) {
-		for(var i=0; i<app.documents.length; i++) {
-
-		}
-	} else {
-		return false;
-	}
+function validateHtml(url) {
+    var newURL = "http://"+url.replace(/^(https?:|)\/\//, "");
+    return newURL;
 }
 
 function dblDigit(n) {
@@ -376,6 +467,9 @@ function SFW(path,size) {
   function step1(enabled, withDialog) {
     if (enabled != undefined && !enabled)
       return;
+
+    app.system( "mkdir -p "+ path + "/output");
+
     var dialogMode = (withDialog ? DialogModes.ALL : DialogModes.NO);
     var desc1 = new ActionDescriptor();
     var desc2 = new ActionDescriptor();
@@ -497,6 +591,7 @@ function SFW(path,size) {
 
   if (runit === true) {
         app.system( "mkdir -p " + _folderSource + "/_temp/Backups" + "&& cp " + path + "/output/" + size + "_backup.gif" + " " + _folderSource + "/_temp/Backups/" );
+        app.system( "rm -rf "+ path + "/output");
 		return true;
 	} else {
 		return false;
